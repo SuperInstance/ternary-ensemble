@@ -1,0 +1,9 @@
+[package]
+name = "ternary-ensemble"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Ensemble methods for ternary agents — combine multiple weak agents into a strong one"
+repository = "https://github.com/SuperInstance/ternary-ensemble"
+
+[dev-dependencies]
