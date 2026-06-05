@@ -96,3 +96,11 @@ Ensemble methods are particularly effective here because the decision boundaries
 ## License
 
 MIT
+
+## See Also
+- **ternary-fitness** — related
+- **ternary-ga** — related
+- **ternary-scoring** — related
+- **ternary-classifier** — related
+- **ternary-voting** — related
+
