@@ -36,7 +36,22 @@ impl StackingCombiner {
     }
 
     /// Fit the meta-learner on training data.
+    ///
+    /// # Panics
+    /// Panics if `agents` or `samples` is empty. With zero samples the
+    /// gradient-averaging step (`grad / samples.len()`) would compute `0.0 / 0`
+    /// and silently poison `meta_bias` with NaN, after which every `predict`
+    /// call would return 2 regardless of input. We refuse that silently-broken
+    /// state up-front.
     pub fn fit(&mut self, agents: &[WeakAgent], samples: &[TernarySample]) {
+        assert!(
+            !agents.is_empty(),
+            "StackingCombiner::fit requires at least one agent"
+        );
+        assert!(
+            !samples.is_empty(),
+            "StackingCombiner::fit requires at least one sample"
+        );
         let n_agents = agents.len();
         let n_classes = 3usize;
 

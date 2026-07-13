@@ -176,6 +176,25 @@ fn test_boosting_combiner_fit_and_predict() {
 }
 
 #[test]
+fn test_boosting_fit_empty_agents_panics() {
+    let result = std::panic::catch_unwind(|| {
+        let mut booster = BoostingCombiner::new(3, 0.1);
+        booster.fit(&[], &make_dataset());
+    });
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_boosting_fit_empty_samples_panics() {
+    let result = std::panic::catch_unwind(|| {
+        let agents = make_agents(3);
+        let mut booster = BoostingCombiner::new(3, 0.1);
+        booster.fit(&agents, &[]);
+    });
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_boosting_ensemble() {
     let agents = make_agents(5);
     let samples = make_dataset();
@@ -208,6 +227,28 @@ fn test_stacking_fit_and_predict() {
     assert!(stacker.fitted);
     let pred = stacker.predict(&agents, &samples[0]);
     assert!(pred <= 2);
+}
+
+#[test]
+fn test_stacking_fit_empty_agents_panics() {
+    let result = std::panic::catch_unwind(|| {
+        let mut stacker = StackingCombiner::new(0.01, 10);
+        stacker.fit(&[], &make_dataset());
+    });
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_stacking_fit_empty_samples_panics() {
+    // Regression: previously this did NOT panic, but silently produced
+    // meta_bias = [NaN, NaN, NaN] with fitted=true, after which every
+    // predict() returned 2 regardless of input. Now it must panic.
+    let result = std::panic::catch_unwind(|| {
+        let agents = make_agents(3);
+        let mut stacker = StackingCombiner::new(0.01, 10);
+        stacker.fit(&agents, &[]);
+    });
+    assert!(result.is_err());
 }
 
 #[test]

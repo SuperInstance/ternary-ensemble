@@ -27,7 +27,21 @@ impl BoostingCombiner {
     }
 
     /// Fit the booster on training data to learn agent weights.
+    ///
+    /// # Panics
+    /// Panics if `agents` or `samples` is empty. Boosting on an empty set is
+    /// degenerate (initial weights would involve division by zero, and no
+    /// error signal could ever be produced), so we treat it as a programming
+    /// error rather than silently producing a meaningless model.
     pub fn fit(&mut self, agents: &[WeakAgent], samples: &[TernarySample]) {
+        assert!(
+            !agents.is_empty(),
+            "BoostingCombiner::fit requires at least one agent"
+        );
+        assert!(
+            !samples.is_empty(),
+            "BoostingCombiner::fit requires at least one sample"
+        );
         let n_agents = agents.len();
         let n_samples = samples.len();
 
