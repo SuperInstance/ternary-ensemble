@@ -41,10 +41,10 @@ impl EvaluationResult {
     /// Per-class precision: of samples predicted as class c, how many were correct?
     pub fn precision(&self) -> [f64; 3] {
         let mut result = [0.0f64; 3];
-        for c in 0..3 {
+        for (c, result_c) in result.iter_mut().enumerate() {
             let total_predicted: usize = (0..3).map(|r| self.confusion_matrix[c][r]).sum();
             if total_predicted > 0 {
-                result[c] = self.confusion_matrix[c][c] as f64 / total_predicted as f64;
+                *result_c = self.confusion_matrix[c][c] as f64 / total_predicted as f64;
             }
         }
         result
@@ -53,10 +53,10 @@ impl EvaluationResult {
     /// Per-class recall: of samples truly in class c, how many were predicted correctly?
     pub fn recall(&self) -> [f64; 3] {
         let mut result = [0.0f64; 3];
-        for c in 0..3 {
+        for (c, result_c) in result.iter_mut().enumerate() {
             let total_actual: usize = (0..3).map(|p| self.confusion_matrix[p][c]).sum();
             if total_actual > 0 {
-                result[c] = self.confusion_matrix[c][c] as f64 / total_actual as f64;
+                *result_c = self.confusion_matrix[c][c] as f64 / total_actual as f64;
             }
         }
         result
@@ -107,7 +107,13 @@ impl EnsembleEvaluator {
 
         let individual_accuracies: Vec<f64> = individual_correct
             .iter()
-            .map(|&c| if n_samples > 0 { c as f64 / n_samples as f64 } else { 0.0 })
+            .map(|&c| {
+                if n_samples > 0 {
+                    c as f64 / n_samples as f64
+                } else {
+                    0.0
+                }
+            })
             .collect();
 
         EvaluationResult {

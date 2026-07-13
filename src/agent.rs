@@ -16,7 +16,11 @@ pub struct WeakAgent {
     bias: f64,
     /// Known accuracy of this agent (0.0 to 1.0, always < 0.60).
     pub accuracy: f64,
-    /// Optional noise seed for deterministic but noisy predictions.
+    /// Optional noise seed reserved for deterministic-but-noisy predictions.
+    ///
+    /// Currently unread; retained on the struct so future perturbation strategies
+    /// can be added without changing the public constructor signature.
+    #[allow(dead_code)]
     noise_seed: u64,
 }
 
@@ -27,7 +31,7 @@ impl WeakAgent {
     /// Panics if accuracy >= 0.60 or accuracy < 0.0.
     pub fn new(id: usize, weights: Vec<f64>, bias: f64, accuracy: f64, noise_seed: u64) -> Self {
         assert!(
-            accuracy >= 0.0 && accuracy < 0.60,
+            (0.0..0.60).contains(&accuracy),
             "Weak agent accuracy must be in [0.0, 0.60), got {}",
             accuracy
         );

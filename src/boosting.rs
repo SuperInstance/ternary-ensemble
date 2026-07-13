@@ -52,7 +52,7 @@ impl BoostingCombiner {
 
             // Update agent weights based on error
             for (a_idx, error) in agent_errors.iter().enumerate() {
-                let err = error.max(1e-10).min(1.0 - 1e-10);
+                let err = error.clamp(1e-10, 1.0 - 1e-10);
                 let alpha = 0.5 * ((1.0 - err) / err).ln() * self.learning_rate;
                 self.agent_weights[a_idx] += alpha;
             }
@@ -81,9 +81,9 @@ impl BoostingCombiner {
                     .unwrap_or(0);
 
                 if ensemble_pred != sample.label {
-                    sample_weights[s_idx] *= (1.0 + self.learning_rate);
+                    sample_weights[s_idx] *= 1.0 + self.learning_rate;
                 } else {
-                    sample_weights[s_idx] *= (1.0 - self.learning_rate * 0.5);
+                    sample_weights[s_idx] *= 1.0 - self.learning_rate * 0.5;
                 }
             }
 

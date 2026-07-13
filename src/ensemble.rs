@@ -1,8 +1,8 @@
 //! Ensemble container that holds weak agents and delegates to a combination strategy.
 
 use crate::{
-    BoostingCombiner, EnsembleEvaluator, StackingCombiner, TernaryLabel,
-    TernarySample, VotingCombiner,
+    BoostingCombiner, EnsembleEvaluator, StackingCombiner, TernaryLabel, TernarySample,
+    VotingCombiner,
 };
 
 /// Strategy for combining weak agent predictions.

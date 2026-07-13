@@ -67,7 +67,7 @@ impl StackingCombiner {
         // Train with simple gradient descent on cross-entropy-like loss
         for _epoch in 0..self.epochs {
             let mut grad_weights = vec![0.0f64; n_agents * n_classes];
-            let mut grad_bias = vec![0.0f64; 3];
+            let mut grad_bias = [0.0f64; 3];
 
             for sample in samples {
                 // Compute meta-learner prediction for this sample
@@ -120,7 +120,7 @@ impl StackingCombiner {
 
         for (a_idx, agent) in agents.iter().enumerate() {
             let pred = agent.predict(sample);
-            for c in 0..3usize {
+            for (c, logit_c) in logits.iter_mut().enumerate() {
                 let w_idx = a_idx * 3 + c;
                 let w = if w_idx < self.meta_weights.len() {
                     self.meta_weights[w_idx]
@@ -128,12 +128,12 @@ impl StackingCombiner {
                     0.0
                 };
                 // One-hot contribution from agent prediction
-                logits[c] += w * if c == pred as usize { 1.0 } else { 0.0 };
+                *logit_c += w * if c == pred as usize { 1.0 } else { 0.0 };
             }
         }
 
-        for c in 0..3 {
-            logits[c] += self.meta_bias.get(c).copied().unwrap_or(0.0);
+        for (c, logit_c) in logits.iter_mut().enumerate() {
+            *logit_c += self.meta_bias.get(c).copied().unwrap_or(0.0);
         }
 
         let predicted = logits

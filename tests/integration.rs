@@ -22,7 +22,9 @@ fn make_dataset() -> Vec<TernarySample> {
 
 fn make_agents(n: usize) -> Vec<WeakAgent> {
     (0..n)
-        .map(|i| WeakAgent::with_accuracy(i, 2, 0.35 + (i as f64 * 0.04).min(0.20), i as u64 * 17 + 3))
+        .map(|i| {
+            WeakAgent::with_accuracy(i, 2, 0.35 + (i as f64 * 0.04).min(0.20), i as u64 * 17 + 3)
+        })
         .collect()
 }
 
@@ -77,7 +79,7 @@ fn test_weak_agent_predict_with_confidence() {
     let sample = make_sample(vec![1.0, 1.0], 2);
     let (label, conf) = agent.predict_with_confidence(&sample);
     assert!(label <= 2);
-    assert!(conf >= 0.0 && conf <= 1.0);
+    assert!((0.0..=1.0).contains(&conf));
 }
 
 // ---- TernarySample tests ----
@@ -217,7 +219,7 @@ fn test_stacking_ensemble() {
     let strategy = CombineStrategy::Stacking(stacker);
     let ensemble = Ensemble::new(agents, strategy);
     let acc = ensemble.evaluator().accuracy(&samples);
-    assert!(acc >= 0.0 && acc <= 1.0);
+    assert!((0.0..=1.0).contains(&acc));
 }
 
 // ---- Evaluator tests ----
@@ -228,7 +230,7 @@ fn test_evaluator_accuracy() {
     let strategy = CombineStrategy::Voting(VotingCombiner::new(VotingStrategy::Majority));
     let ensemble = Ensemble::new(agents, strategy);
     let acc = ensemble.evaluator().accuracy(&make_dataset());
-    assert!(acc >= 0.0 && acc <= 1.0);
+    assert!((0.0..=1.0).contains(&acc));
 }
 
 #[test]
@@ -275,7 +277,8 @@ fn test_evaluator_compare() {
     let comparisons = ensemble.evaluator().compare(&make_dataset());
     assert_eq!(comparisons.len(), 5);
     for (i, agent_acc, ens_acc) in &comparisons {
-        assert!(*agent_acc >= 0.0 && *agent_acc <= 1.0);
-        assert!(*ens_acc >= 0.0 && *ens_acc <= 1.0);
+        assert!(*i < 5);
+        assert!((*agent_acc >= 0.0) && (*agent_acc <= 1.0));
+        assert!((*ens_acc >= 0.0) && (*ens_acc <= 1.0));
     }
 }
