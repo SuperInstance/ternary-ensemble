@@ -13,7 +13,7 @@ pub struct EvaluationResult {
     pub n_samples: usize,
     /// Number of correct ensemble predictions.
     pub ensemble_correct: usize,
-    /// Confusion matrix for the ensemble: [predicted][actual].
+    /// Confusion matrix for the ensemble: `confusion_matrix[predicted][actual]`.
     pub confusion_matrix: [[usize; 3]; 3],
 }
 

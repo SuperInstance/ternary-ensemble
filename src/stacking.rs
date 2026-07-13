@@ -1,4 +1,26 @@
 //! Stacking combiner — meta-learner that combines base agent outputs.
+//!
+//! # On data leakage
+//!
+//! Classic stacking leakage happens when base models are trained on dataset D
+//! and then asked to produce the meta-features used to train the meta-learner
+//! on that same D — the base predictions are overfit to D, so the meta-learner
+//! learns weights that won't generalize. The standard fix is to feed the
+//! meta-learner only out-of-fold base predictions (or predictions on a held-out
+//! split).
+//!
+//! That risk **does not apply** to this combiner, because [`WeakAgent`] has no
+//! `fit` method: agents are constructed with fixed `weights`, `bias`, and
+//! `accuracy` via [`WeakAgent::new`] / [`WeakAgent::with_accuracy`]. A base
+//! agent's `predict(sample)` is therefore identical whether `sample` came from
+//! the stacking fit set or from a held-out test set — there is no training-time
+//! overfit on the fit samples to leak. The only thing being learned here is the
+//! meta-learner's weight matrix, which is the same statistical overfitting risk
+//! any gradient-descent-trained model has, not a stacking-specific leak.
+//!
+//! If future changes add a trainable base model (so that `WeakAgent::fit`
+//! exists and is invoked by the stacking combiner), this reasoning no longer
+//! holds and the combiner must be updated to use out-of-fold predictions.
 
 use crate::{TernaryLabel, TernarySample, WeakAgent};
 
