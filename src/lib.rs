@@ -16,7 +16,7 @@ mod voting;
 pub use agent::WeakAgent;
 pub use boosting::BoostingCombiner;
 pub use ensemble::{CombineStrategy, Ensemble};
-pub use evaluator::EnsembleEvaluator;
+pub use evaluator::{EnsembleEvaluator, EvaluationResult};
 pub use stacking::StackingCombiner;
 pub use voting::{VotingCombiner, VotingStrategy};
 
