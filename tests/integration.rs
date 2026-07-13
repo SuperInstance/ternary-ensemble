@@ -294,6 +294,84 @@ fn test_boosting_combiner_fit_and_predict() {
     assert!(pred <= 2);
 }
 
+/// Hand-derived worked example for BoostingCombiner weight updates.
+///
+/// Setup:
+///   - 2 constant agents: agent 0 always predicts 0, agent 1 always predicts 1.
+///   - 3 samples with labels [0, 1, 1].
+///   - 1 boosting round, learning_rate = 0.5.
+///
+/// Hand derivation (matches BoostingCombiner::fit step by step):
+///   initial agent_weights  = [0.5, 0.5]
+///   initial sample_weights = [1/3, 1/3, 1/3]
+///
+///   Round 0:
+///     agent_errors[0] = sw[1] + sw[2] = 2/3   (agent 0 wrong on samples 1,2)
+///     agent_errors[1] = sw[0]         = 1/3   (agent 1 wrong on sample  0)
+///     alpha_0 = 0.5 * ln((1 - 2/3)/(2/3)) * 0.5 = 0.25 * ln(0.5) ≈ -0.1733
+///     alpha_1 = 0.5 * ln((1 - 1/3)/(1/3)) * 0.5 = 0.25 * ln(2.0) ≈ +0.1733
+///     aw[0] += alpha_0  =>  0.5 - 0.1733 = 0.3267
+///     aw[1] += alpha_1  =>  0.5 + 0.1733 = 0.6733
+///     normalize: sum = 1.0, unchanged
+///
+///     ensemble prediction for every sample = argmax(scores) where
+///       scores = [aw[0], aw[1], 0] = [0.3267, 0.6733, 0]  =>  predicts 1
+///     sample 0 (label 0, pred 1, WRONG):  sw[0] *= 1.5      =>  0.5
+///     sample 1 (label 1, pred 1, RIGHT):  sw[1] *= 0.75     =>  0.25
+///     sample 2 (label 1, pred 1, RIGHT):  sw[2] *= 0.75     =>  0.25
+///     normalize: sum = 1.0, unchanged
+///
+/// Final agent_weights = [0.3267..., 0.6733...]; predict() = 1.
+#[test]
+fn test_boosting_weight_updates_hand_derived() {
+    let agents = vec![constant_agent(0, 0), constant_agent(1, 1)];
+    let samples = vec![
+        make_sample(vec![0.0, 0.0], 0),
+        make_sample(vec![0.0, 0.0], 1),
+        make_sample(vec![0.0, 0.0], 1),
+    ];
+    let mut booster = BoostingCombiner::new(1, 0.5);
+    booster.fit(&agents, &samples);
+
+    let aw0_expected = 0.5 + 0.25 * (0.5_f64).ln();
+    let aw1_expected = 0.5 + 0.25 * (2.0_f64).ln();
+    assert!(
+        (booster.agent_weights[0] - aw0_expected).abs() < 1e-12,
+        "agent_weights[0] = {}, expected {}",
+        booster.agent_weights[0],
+        aw0_expected
+    );
+    assert!(
+        (booster.agent_weights[1] - aw1_expected).abs() < 1e-12,
+        "agent_weights[1] = {}, expected {}",
+        booster.agent_weights[1],
+        aw1_expected
+    );
+    // After this round the ensemble weighted vote for any input must be 1
+    // (aw[1] > aw[0], agents constant).
+    let probe = make_sample(vec![0.0, 0.0], 0);
+    assert_eq!(booster.predict(&agents, &probe), 1);
+}
+
+/// After fit, predict on an agent list longer than the trained one must use
+/// the documented fallback weight `1.0 / agents.len()` for the unseen agents
+/// (here: agent 2 has no learned weight, so its vote counts as 1/3).
+#[test]
+fn test_boosting_predict_fallback_weight_for_unfitted_agents() {
+    let trained = vec![constant_agent(0, 0), constant_agent(1, 1)];
+    let samples = vec![make_sample(vec![0.0, 0.0], 0)];
+    let mut booster = BoostingCombiner::new(1, 0.5);
+    booster.fit(&trained, &samples);
+    // Trained on 2 agents; predict on 3 — the third uses fallback weight 1/3.
+    let probe_agents = vec![
+        constant_agent(0, 0),
+        constant_agent(1, 1),
+        constant_agent(2, 2),
+    ];
+    let pred = booster.predict(&probe_agents, &make_sample(vec![0.0, 0.0], 0));
+    assert!(pred <= 2);
+}
+
 #[test]
 fn test_boosting_fit_empty_agents_panics() {
     let result = std::panic::catch_unwind(|| {
