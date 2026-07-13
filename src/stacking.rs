@@ -154,7 +154,8 @@ impl StackingCombiner {
         let predicted = logits
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .rev()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(i, _)| i as TernaryLabel)
             .unwrap_or(0);
 
@@ -162,9 +163,18 @@ impl StackingCombiner {
     }
 
     /// Predict using the meta-learner.
+    ///
+    /// If the combiner has not been fitted yet, this silently falls back to a
+    /// simple majority vote over the supplied agents (matching
+    /// [`VotingStrategy::Majority`](crate::VotingStrategy::Majority) semantics,
+    /// including lowest-class-index tie-breaking). This fallback exists so that
+    /// a freshly-constructed `StackingCombiner` can still be used inside an
+    /// [`Ensemble`](crate::Ensemble) before `fit` is called, but callers that
+    /// care about the meta-learner's contribution should always call `fit`
+    /// first — the fallback is clearly labelled via [`fitted`](Self::fitted).
     pub fn predict(&self, agents: &[WeakAgent], sample: &TernarySample) -> TernaryLabel {
         if !self.fitted {
-            // Fallback to simple majority vote if not fitted
+            // Fallback to simple majority vote if not fitted.
             let mut counts = [0usize; 3];
             for agent in agents {
                 let pred = agent.predict(sample);
@@ -173,6 +183,7 @@ impl StackingCombiner {
             return counts
                 .iter()
                 .enumerate()
+                .rev()
                 .max_by_key(|(_, &c)| c)
                 .map(|(i, _)| i as TernaryLabel)
                 .unwrap_or(0);

@@ -90,7 +90,8 @@ impl BoostingCombiner {
                 let ensemble_pred = scores
                     .iter()
                     .enumerate()
-                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .rev()
+                    .max_by(|(_, a), (_, b)| a.total_cmp(b))
                     .map(|(i, _)| i as TernaryLabel)
                     .unwrap_or(0);
 
@@ -128,7 +129,8 @@ impl BoostingCombiner {
         scores
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .rev()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(i, _)| i as TernaryLabel)
             .unwrap_or(0)
     }

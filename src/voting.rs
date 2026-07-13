@@ -1,4 +1,16 @@
 //! Voting-based combination strategies.
+//!
+//! # Tie-breaking convention
+//!
+//! All three strategies resolve ties toward the **lowest class index**: if two
+//! classes receive equal support, class 0 beats class 1 beats class 2. This is
+//! enforced by iterating the per-class scores in reverse and using
+//! `Iterator::max_by` / `min_by` (which return the *last* element on ties), so
+//! the lowest index — visited last — wins. Comparisons use `f64::total_cmp`
+//! everywhere, which gives a fully-defined order even when NaN scores
+//! accidentally arise (NaN sorts greater than every finite value under
+//! `total_cmp`, so a NaN score would lose to any finite score under
+//! max-selection and win under min-selection — predictable, not silent).
 
 use crate::{TernaryLabel, TernarySample, WeakAgent};
 
@@ -18,7 +30,13 @@ pub enum VotingStrategy {
 pub struct VotingCombiner {
     /// The voting strategy to use.
     pub strategy: VotingStrategy,
-    /// Optional per-agent weights (used with Weighted strategy).
+    /// Optional per-agent weights (used with the [`Weighted`](VotingStrategy::Weighted) strategy).
+    ///
+    /// If the vector is shorter than the agent list passed to [`predict`](Self::predict),
+    /// the missing weights fall back to each agent's `accuracy` field. This
+    /// silent fallback is intentional but worth noting: if you intended to
+    /// weight every agent explicitly, pass a vector of the same length as the
+    /// agent slice.
     pub agent_weights: Vec<f64>,
 }
 
@@ -54,9 +72,12 @@ impl VotingCombiner {
             let pred = agent.predict(sample);
             counts[pred as usize] += 1;
         }
+        // Reverse-iterate so max_by_key's "last wins" tie rule resolves to the
+        // lowest class index. See the crate-level tie-breaking note.
         counts
             .iter()
             .enumerate()
+            .rev()
             .max_by_key(|(_, &c)| c)
             .map(|(i, _)| i as TernaryLabel)
             .unwrap_or(0)
@@ -73,10 +94,13 @@ impl VotingCombiner {
             };
             scores[pred as usize] += w;
         }
+        // total_cmp() for fully-defined ordering; reverse-iterate for
+        // lowest-index-wins tie-breaking (see crate-level note).
         scores
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .rev()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(i, _)| i as TernaryLabel)
             .unwrap_or(0)
     }
@@ -95,17 +119,19 @@ impl VotingCombiner {
                 confidences.push((label, conf));
             }
             // Sort by confidence descending; highest confidence gets rank 0
-            confidences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            confidences.sort_by(|a, b| b.1.total_cmp(&a.1));
             for (rank, (label, _)) in confidences.iter().enumerate() {
                 borda_scores[*label as usize] += rank as f64;
             }
         }
 
-        // Lowest Borda score wins
+        // Lowest Borda score wins. Reverse-iterate so ties resolve to the
+        // lowest class index (min_by returns the last min element).
         borda_scores
             .iter()
             .enumerate()
-            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .rev()
+            .min_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(i, _)| i as TernaryLabel)
             .unwrap_or(0)
     }
