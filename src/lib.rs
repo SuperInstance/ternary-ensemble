@@ -5,6 +5,25 @@
 //! Ternary agents produce one of three possible outputs (represented as `0, 1, 2`).
 //! This crate provides ensemble strategies (voting, boosting, stacking) to combine
 //! multiple weak agents into a single stronger predictor.
+//!
+//! # Example
+//!
+//! ```
+//! use ternary_ensemble::{
+//!     CombineStrategy, Ensemble, TernarySample, VotingCombiner, VotingStrategy, WeakAgent,
+//! };
+//!
+//! let agents: Vec<WeakAgent> = (0..5)
+//!     .map(|i| WeakAgent::with_accuracy(i, 2, 0.40, i as u64 * 17 + 3))
+//!     .collect();
+//! let strategy =
+//!     CombineStrategy::Voting(VotingCombiner::new(VotingStrategy::Majority));
+//! let ensemble = Ensemble::new(agents, strategy);
+//!
+//! let probe = TernarySample::new(vec![0.1, 0.2], 0);
+//! let prediction = ensemble.predict(&probe);
+//! assert!(prediction <= 2);
+//! ```
 
 mod agent;
 mod boosting;
