@@ -1,4 +1,26 @@
 //! Stacking combiner — meta-learner that combines base agent outputs.
+//!
+//! # On data leakage
+//!
+//! Classic stacking leakage happens when base models are trained on dataset D
+//! and then asked to produce the meta-features used to train the meta-learner
+//! on that same D — the base predictions are overfit to D, so the meta-learner
+//! learns weights that won't generalize. The standard fix is to feed the
+//! meta-learner only out-of-fold base predictions (or predictions on a held-out
+//! split).
+//!
+//! That risk **does not apply** to this combiner, because [`WeakAgent`] has no
+//! `fit` method: agents are constructed with fixed `weights`, `bias`, and
+//! `accuracy` via [`WeakAgent::new`] / [`WeakAgent::with_accuracy`]. A base
+//! agent's `predict(sample)` is therefore identical whether `sample` came from
+//! the stacking fit set or from a held-out test set — there is no training-time
+//! overfit on the fit samples to leak. The only thing being learned here is the
+//! meta-learner's weight matrix, which is the same statistical overfitting risk
+//! any gradient-descent-trained model has, not a stacking-specific leak.
+//!
+//! If future changes add a trainable base model (so that `WeakAgent::fit`
+//! exists and is invoked by the stacking combiner), this reasoning no longer
+//! holds and the combiner must be updated to use out-of-fold predictions.
 
 use crate::{TernaryLabel, TernarySample, WeakAgent};
 
@@ -36,7 +58,22 @@ impl StackingCombiner {
     }
 
     /// Fit the meta-learner on training data.
+    ///
+    /// # Panics
+    /// Panics if `agents` or `samples` is empty. With zero samples the
+    /// gradient-averaging step (`grad / samples.len()`) would compute `0.0 / 0`
+    /// and silently poison `meta_bias` with NaN, after which every `predict`
+    /// call would return 2 regardless of input. We refuse that silently-broken
+    /// state up-front.
     pub fn fit(&mut self, agents: &[WeakAgent], samples: &[TernarySample]) {
+        assert!(
+            !agents.is_empty(),
+            "StackingCombiner::fit requires at least one agent"
+        );
+        assert!(
+            !samples.is_empty(),
+            "StackingCombiner::fit requires at least one sample"
+        );
         let n_agents = agents.len();
         let n_classes = 3usize;
 
@@ -67,7 +104,7 @@ impl StackingCombiner {
         // Train with simple gradient descent on cross-entropy-like loss
         for _epoch in 0..self.epochs {
             let mut grad_weights = vec![0.0f64; n_agents * n_classes];
-            let mut grad_bias = vec![0.0f64; 3];
+            let mut grad_bias = [0.0f64; 3];
 
             for sample in samples {
                 // Compute meta-learner prediction for this sample
@@ -120,7 +157,7 @@ impl StackingCombiner {
 
         for (a_idx, agent) in agents.iter().enumerate() {
             let pred = agent.predict(sample);
-            for c in 0..3usize {
+            for (c, logit_c) in logits.iter_mut().enumerate() {
                 let w_idx = a_idx * 3 + c;
                 let w = if w_idx < self.meta_weights.len() {
                     self.meta_weights[w_idx]
@@ -128,18 +165,19 @@ impl StackingCombiner {
                     0.0
                 };
                 // One-hot contribution from agent prediction
-                logits[c] += w * if c == pred as usize { 1.0 } else { 0.0 };
+                *logit_c += w * if c == pred as usize { 1.0 } else { 0.0 };
             }
         }
 
-        for c in 0..3 {
-            logits[c] += self.meta_bias.get(c).copied().unwrap_or(0.0);
+        for (c, logit_c) in logits.iter_mut().enumerate() {
+            *logit_c += self.meta_bias.get(c).copied().unwrap_or(0.0);
         }
 
         let predicted = logits
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .rev()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(i, _)| i as TernaryLabel)
             .unwrap_or(0);
 
@@ -147,9 +185,18 @@ impl StackingCombiner {
     }
 
     /// Predict using the meta-learner.
+    ///
+    /// If the combiner has not been fitted yet, this silently falls back to a
+    /// simple majority vote over the supplied agents (matching
+    /// [`VotingStrategy::Majority`](crate::VotingStrategy::Majority) semantics,
+    /// including lowest-class-index tie-breaking). This fallback exists so that
+    /// a freshly-constructed `StackingCombiner` can still be used inside an
+    /// [`Ensemble`](crate::Ensemble) before `fit` is called, but callers that
+    /// care about the meta-learner's contribution should always call `fit`
+    /// first — the fallback is clearly labelled via [`fitted`](Self::fitted).
     pub fn predict(&self, agents: &[WeakAgent], sample: &TernarySample) -> TernaryLabel {
         if !self.fitted {
-            // Fallback to simple majority vote if not fitted
+            // Fallback to simple majority vote if not fitted.
             let mut counts = [0usize; 3];
             for agent in agents {
                 let pred = agent.predict(sample);
@@ -158,6 +205,7 @@ impl StackingCombiner {
             return counts
                 .iter()
                 .enumerate()
+                .rev()
                 .max_by_key(|(_, &c)| c)
                 .map(|(i, _)| i as TernaryLabel)
                 .unwrap_or(0);
